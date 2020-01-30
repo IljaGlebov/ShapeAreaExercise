@@ -1,63 +1,76 @@
 ﻿using System;
+using System.Collections.Immutable;
+using System.Linq;
 using ClassLibrary;
 
+
 namespace ConsoleApplication {
-    
-    abstract class IO<T> {
-        public abstract IO<B> Bind<B>(Func<T, IO<B>> f);
-    }
-
-    class IO<I, O, T> : IO<T> {
-        public I Input { get; }
-        public Func<O, IO<T>> Next { get; }
-
-        public IO(I input, Func<O, IO<T>> next) {
-            Input = input;
-            Next = next;
-        }
-
-        public override IO<B> Bind<B>(Func<T, IO<B>> f) {
-            throw new NotImplementedException();
-        }
-    }
-
-    static class IO {
-        public static IO<string> Read(string help) => throw    new NotImplementedException();
-        public static IO<T> Return<T>(T value) => throw    new NotImplementedException();
-
-        public static IO<T> Map<T, I>(this IO<I> io, Func<I, T> map) => io.Bind(arg => Return(map(arg)));
-        public static IO<T> Error<T>(string message) => throw    new NotImplementedException();
-        
-        public static IO<float> Parse(this IO<string> io) => throw    new NotImplementedException();
-        public static IO<O> BindResult<T, O>(this IO<T> io, Func<T, Result<O>> func) => throw    new NotImplementedException();
-
-        
-    }
-    
     
     
     internal class Program {
 
 
+        static IO<Point> ReadPoint() => IO.Read("X?").ToFloat().Bind(x => IO.Read("Y?").ToFloat().Bind(y => IO.Return(new Point(x, y))));
+        static IO<Point> ReadPointN(int i) => IO.Print($"Point {i}").Bind(_ => ReadPoint()); 
+        
+        
+        static IO<Point[]> ReadPoints(int count) {
+            var first = ReadPointN(0).Bind(point => IO.Return(ImmutableArray<Point>.Empty.Add(point)));
+            
+            return Enumerable.Range(1, count - 1).Aggregate(first, (io, i) => io.Bind(array => ReadPointN(i).Bind(point => IO.Return(array.Add(point)))))
+                    .Map(array => array.ToArray());
+        }
+
         public static void Main(string[] args) {
-            var io = IO.Read("Figure? [Circle, Triangle]")
+            var io = IO.Read("Figure? [circle, triangle, polygon]")
                 .Map(s => s.ToLower())
                 .Bind(s => s switch {
-                    "circle" => IO.Read("Radius?").Parse().Map(i => (Shape) new Circle(i)),
+                    "circle" => IO.Read("Radius?").ToFloat().Map(i => (Shape) new Circle(i)),
 
-                    "triangle" => IO.Read("Side A?").Parse()
-                        .Bind(sideA => IO.Read("Side B?").Parse()
-                            .Bind(sideB => IO.Read("Side C?").Parse().Map(sideC => (Shape) new Triangle(sideA, sideB, sideC)))),
+                    "triangle" => IO.Read("Side A?").ToFloat()
+                        .Bind(sideA => IO.Read("Side B?").ToFloat()
+                            .Bind(sideB => IO.Read("Side C?").ToFloat().Map(sideC => (Shape) new Triangle(sideA, sideB, sideC)))),
                     
-                    _ => IO.Error<Shape>("Неизвестный тип")
-                    }).BindResult(Area.Calculate);
+                    "polygon" => IO.Read("Size?")
+                                   .ToInt()
+                                   .Bind(ReadPoints)
+                                   .Map(points => (Shape) new Polygon(points)),
+                    
+                    _ => IO.Error<Shape>("Неизвестный тип"),
+                    
+                    }).BindResult(Area.Calculate)
+                    .Bind(d => IO.Print($"Area = {d}"));
 
 
             Run(io);
+
+            Console.ReadLine();
         }
 
-        private static void Run(IO<double> io) {
-            
+        private static void Run<T>(IO<T> io) {
+            switch (io) {
+                case IO<Read, string, T> read:
+                    
+                    Console.WriteLine(read.Input.Help);
+
+                    var readLine = Console.ReadLine();
+                    
+                    Run(read.Next(readLine));
+                    
+                    break;
+                
+                case IO<Print, Unit, T> print : 
+                    Console.WriteLine(print.Input.Text);
+                    
+                    Run(print.Next(new Unit()));
+                    
+                    break;
+                
+                case Error<T> error :
+                    Console.WriteLine("Ошибка : " + error.Message);
+                    
+                    break;
+            }
         }
     }
 }
