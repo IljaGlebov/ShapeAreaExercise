@@ -10,7 +10,12 @@ namespace ConsoleApplication {
     internal class Program {
 
 
-        static IO<Point> ReadPoint() => IO.Read("X?").ToFloat().Bind(x => IO.Read("Y?").ToFloat().Bind(y => IO.Return(new Point(x, y))));
+        static IO<Point> ReadPoint() => IO.Read("X?")
+                                          .ToFloat()
+                                          .Bind(x => IO.Read("Y?")
+                                                       .ToFloat()
+                                                       .Bind(y => IO.Return(new Point(x, y))));
+        
         static IO<Point> ReadPointN(int i) => IO.Print($"Point {i}").Bind(_ => ReadPoint()); 
         
         
